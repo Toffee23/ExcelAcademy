@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:course_view/model.dart';
 import 'package:course_view/pages/course_view/page.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 class HomeCard extends StatefulWidget {
@@ -21,13 +24,43 @@ class _HomeCardState extends State<HomeCard> {
 
   @override
   void initState() {
+    initialize();
+
     super.initState();
-    _controller =
-        VideoPlayerController.networkUrl(Uri.parse(widget.videoModel.url))
-          ..initialize().then((_) {
-            // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
-            setState(() {});
-          });
+  }
+
+  Future<void> initialize() async {
+    final offlinePath = await getOfflinePath();
+    if (offlinePath != null) {
+      _controller = VideoPlayerController.file(File(offlinePath))
+        ..initialize().then((_) {
+          // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
+          setState(() {});
+        });
+    } else {
+      _controller =
+          VideoPlayerController.networkUrl(Uri.parse(widget.videoModel.url))
+            ..initialize().then((_) {
+              // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
+              setState(() {});
+            });
+    }
+  }
+
+  Future<String?> getOfflinePath() async {
+    // Get the app's documents directory
+    final Directory appDocumentsDirectory =
+        await getApplicationDocumentsDirectory();
+
+    // Specify the file path to save the video
+    final String videoPath =
+        '${appDocumentsDirectory.path}/${widget.videoModel.id}.mp4';
+
+    final isExist = await File(videoPath).exists();
+    if (isExist) {
+      return videoPath;
+    }
+    return null;
   }
 
   @override
@@ -42,7 +75,7 @@ class _HomeCardState extends State<HomeCard> {
               context,
               MaterialPageRoute(
                   builder: (context) =>
-                      CourseViewPage(videoUrl: widget.videoModel.url)));
+                      CourseViewPage(videoModel: widget.videoModel)));
         },
         padding: const EdgeInsets.fromLTRB(10.0, 10.0, 10.0, 0.0),
         color: Colors.white,

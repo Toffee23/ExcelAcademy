@@ -1,19 +1,20 @@
 import 'dart:io';
 
 import 'package:chewie/chewie.dart';
+import 'package:course_view/model.dart';
 import 'package:course_view/widgets/button.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:dio/dio.dart';
 
 class CourseViewPage extends StatefulWidget {
   const CourseViewPage({
     Key? key,
-    required this.videoUrl,
+    required this.videoModel,
   }) : super(key: key);
-  final String videoUrl;
+  final VideoModel videoModel;
 
   @override
   State<CourseViewPage> createState() => _CourseViewPageState();
@@ -46,16 +47,29 @@ class _CourseViewPageState extends State<CourseViewPage> {
   ];
 
   Future<void> initializePlayer() async {
-    _videoPlayerController1 =
-        VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    _videoPlayerController2 =
-        VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    await Future.wait([
-      _videoPlayerController1.initialize(),
-      _videoPlayerController2.initialize()
-    ]);
-    _createChewieController();
-    setState(() {});
+    print('you');
+    final offlinePath = await getOfflinePath();
+    if (offlinePath != null) {
+      print('time');
+      _videoPlayerController1 = VideoPlayerController.file(File(offlinePath));
+      _videoPlayerController2 = VideoPlayerController.file(File(offlinePath));
+      await Future.wait([
+        _videoPlayerController1.initialize(),
+        _videoPlayerController2.initialize()
+      ]);
+      _createChewieController();
+    } else {
+      print('the');
+      _videoPlayerController1 =
+          VideoPlayerController.networkUrl(Uri.parse(widget.videoModel.url));
+      _videoPlayerController2 =
+          VideoPlayerController.networkUrl(Uri.parse(widget.videoModel.url));
+      await Future.wait([
+        _videoPlayerController1.initialize(),
+        _videoPlayerController2.initialize()
+      ]);
+      _createChewieController();
+    }
   }
 
   void _createChewieController() {
@@ -126,11 +140,16 @@ class _CourseViewPageState extends State<CourseViewPage> {
       _chewieController!.videoPlayerController.value.isInitialized;
 
   Future<void> downloadVideo() async {
+    print('anything');
+    final result = await getOfflinePath();
+    print(result);
+
     final Dio dio = Dio();
 
     try {
+      showProgressDialog();
       final Response<List<int>> response = await dio.get<List<int>>(
-        widget.videoUrl,
+        widget.videoModel.url,
         options: Options(
           responseType: ResponseType.bytes,
           followRedirects: false,
@@ -142,15 +161,54 @@ class _CourseViewPageState extends State<CourseViewPage> {
           await getApplicationDocumentsDirectory();
 
       // Specify the file path to save the video
-      final String savePath = '${appDocumentsDirectory.path}/video.mp4';
-
+      // final String savePath =
+      //     '${appDocumentsDirectory.path}/${widget.videoModel.id}.mp4';
+      final String savePath = 'storage/emulated/0/document/video.mp4';
       // Write the downloaded bytes to the file
       await File(savePath).writeAsBytes(response.data!);
-
+      closeProgressDialog();
       print('Video downloaded successfully to: $savePath');
     } catch (error) {
       print('Error downloading video: $error');
     }
+  }
+
+  void showProgressDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          title: Text('Offline Download'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              Text('Downloading for offline in progress'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void closeProgressDialog() {
+    Navigator.of(context).pop();
+  }
+
+  Future<String?> getOfflinePath() async {
+    // Get the app's documents directory
+    final Directory appDocumentsDirectory =
+        await getApplicationDocumentsDirectory();
+
+    // Specify the file path to save the video
+    final String videoPath =
+        '${appDocumentsDirectory.path}/${widget.videoModel.id}.mp4';
+
+    final isExist = await File(videoPath).exists();
+    if (isExist) {
+      return videoPath;
+    }
+    return null;
   }
 
   @override
